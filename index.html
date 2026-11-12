@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tomnova | Monitoreo IoT Finca Salvador</title>
+    <link rel="stylesheet" href="css/styles.css?v=8.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <!-- ================= 1. VISTA DE LOGIN Y REGISTRO ================= -->
+    <div id="auth-container" class="auth-overlay">
+        <div class="auth-box">
+            <div class="auth-logo-img-container">
+                <img src="assets/TomNova.jpeg" alt="Tomnova Logo" class="auth-logo-img" onerror="this.onerror=null; this.src='assets/logo-tomnova.svg';">
+            </div>
+            <h2>Tomnova</h2>
+            <p class="auth-sub">Sistema IoT - Finca Salvador</p>
+            
+            <form id="login-form" onsubmit="manejarLogin(event)">
+                <div class="input-group">
+                    <i class="fa-solid fa-envelope"></i>
+                    <input type="email" id="login-email" placeholder="Correo electrónico" required>
+                </div>
+                <div class="input-group">
+                    <i class="fa-solid fa-lock"></i>
+                    <input type="password" id="login-pass" placeholder="Contraseña" required>
+                </div>
+                <button type="submit" class="btn-primary">Iniciar Sesión</button>
+                <p class="auth-switch">¿No tienes cuenta de Agricultor? <span onclick="cambiarVistaAuth('registro')">Regístrate aquí</span></p>
+            </form>
+
+            <form id="registro-form" class="oculto" onsubmit="manejarRegistro(event)">
+                <div class="input-group">
+                    <i class="fa-solid fa-user"></i>
+                    <input type="text" id="reg-nombre" placeholder="Nombre completo" required>
+                </div>
+                <div class="input-group">
+                    <i class="fa-solid fa-envelope"></i>
+                    <input type="email" id="reg-email" placeholder="Correo electrónico" required>
+                </div>
+                <div class="input-group">
+                    <i class="fa-solid fa-lock"></i>
+                    <input type="password" id="reg-pass" placeholder="Contraseña" required>
+                </div>
+                <div class="input-group disabled-group">
+                    <i class="fa-solid fa-user-tag"></i>
+                    <input type="text" value="Rol: Agricultor (Estándar)" disabled readonly>
+                </div>
+                <button type="submit" class="btn-primary">Registrarse como Agricultor</button>
+                <p class="auth-switch">¿Ya tienes cuenta? <span onclick="cambiarVistaAuth('login')">Inicia sesión</span></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= 2. ESTRUCTURA CON SIDEBAR LATERAL ================= -->
+    <div id="app-container" class="app-layout oculto">
+        
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-logo-wrapper">
+                    <img src="assets/TomNova.jpeg" alt="Tomnova" class="sidebar-logo-img" onerror="this.onerror=null; this.src='assets/logo-tomnova.svg';">
+                </div>
+                <span class="brand-name">Tomnova</span>
+            </div>
+
+            <div class="user-role-badge">
+                <i class="fa-solid fa-user-shield" id="sidebar-role-icon"></i>
+                <span id="sidebar-role-text">Rol: Agricultor</span>
+            </div>
+
+            <nav class="sidebar-menu">
+                <button class="menu-item active solo-agricultor" id="btn-menu-panel" onclick="cambiarSeccion('panel', this)">
+                    <i class="fa-solid fa-table-columns"></i> <span>Panel del cultivo</span>
+                </button>
+                <button class="menu-item solo-agricultor" id="btn-menu-ia" onclick="cambiarSeccion('ia-chat', this)">
+                    <i class="fa-solid fa-robot"></i> <span>Asistente IA (Gemini)</span>
+                    <span class="badge-new">IA</span>
+                </button>
+                <button class="menu-item solo-agricultor" id="btn-menu-alertas" onclick="cambiarSeccion('alertas', this)">
+                    <i class="fa-solid fa-bell"></i> <span>Alertas</span>
+                    <span class="badge-count" id="badge-alertas">0</span>
+                </button>
+                <button class="menu-item solo-agricultor" id="btn-menu-historial" onclick="cambiarSeccion('historial', this)">
+                    <i class="fa-solid fa-clock-rotate-left"></i> <span>Historial</span>
+                </button>
+                <button class="menu-item solo-agricultor" id="btn-menu-ajustes" onclick="cambiarSeccion('ajustes', this)">
+                    <i class="fa-solid fa-sliders"></i> <span>Ajustes del cultivo</span>
+                </button>
+                <button class="menu-item solo-agricultor" id="btn-menu-soporte" onclick="cambiarSeccion('soporte-admin', this)">
+                    <i class="fa-solid fa-paper-plane"></i> <span>Reportar al Admin</span>
+                    <span class="badge-count" id="badge-respuestas" style="display:none;">0</span>
+                </button>
+
+                <button class="menu-item solo-admin" id="btn-menu-admin-panel" onclick="cambiarSeccion('admin-panel', this)">
+                    <i class="fa-solid fa-users-gear"></i> <span>Administración de Cuentas</span>
+                </button>
+                <button class="menu-item solo-admin" id="btn-menu-admin-reportes" onclick="cambiarSeccion('admin-reportes', this)">
+                    <i class="fa-solid fa-inbox"></i> <span>Reportes Recibidos</span>
+                    <span class="badge-count" id="badge-reportes">0</span>
+                </button>
+
+                <button class="menu-item" onclick="cambiarSeccion('perfil', this)">
+                    <i class="fa-solid fa-user-gear"></i> <span>Perfil</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="logout-btn" onclick="cerrarSesion()">
+                    <i class="fa-solid fa-right-from-bracket"></i> <span>Cerrar sesión</span>
+                </button>
+            </div>
+        </aside>
+
+        <div class="main-wrapper">
+            
+            <header class="top-bar">
+                <div class="top-status">
+                    <span class="status-indicator">
+                        <span class="dot offline" id="status-dot"></span>
+                        <span id="status-text">ESP32 sin conexión</span>
+                    </span>
+                    <span class="divider">•</span>
+                    <span class="last-update">Última lectura: <strong id="clock-display">--:--:--</strong></span>
+                </div>
+            </header>
+
+            <main class="content-body">
+                
+                <!-- SECCIÓN 1: PANEL DEL CULTIVO -->
+                <section id="sec-panel" class="seccion-view">
+                    <div class="panel-header-title">
+                        <h1 class="page-title"><i class="fa-solid fa-wheat-awn title-icon"></i> Panel del cultivo</h1>
+                        <p class="section-desc">Estado agronómico del invernadero de tomate en tiempo real — Finca Salvador</p>
+                    </div>
+
+                    <div class="hero-card hero-card-vivid">
+                        <div class="hero-card-top">
+                            <div class="hero-title-group">
+                                <div class="metric-icon-box blue-gradient">
+                                    <i class="fa-solid fa-droplet"></i>
+                                </div>
+                                <div>
+                                    <span class="hero-label">Humedad del suelo</span>
+                                    <div class="hero-value" id="val-hum-suelo-hero">-- %</div>
+                                </div>
+                            </div>
+                            <span class="sensor-badge"><i class="fa-solid fa-microchip"></i> Sensor ADC34</span>
+                        </div>
+
+                        <div class="progress-bar-container">
+                            <div class="progress-track">
+                                <div class="progress-fill" id="progress-fill" style="width: 0%;"></div>
+                                <div class="progress-threshold-zone" style="left: 85%; width: 5%;">
+                                    <span class="threshold-label">Óptimo: 85–90 %</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="hero-status-sub">
+                            <span class="dot-indicator green" id="riego-dot"></span>
+                            <span id="riego-sub-text">Esperando datos del ESP32…</span>
+                        </div>
+                    </div>
+
+                    <div class="cards-grid-4">
+                        <div class="sub-card card-vivid">
+                            <div class="card-header-flex">
+                                <span class="card-label">Temperatura</span>
+                                <div class="metric-icon-badge red-soft">
+                                    <i class="fa-solid fa-temperature-half"></i>
+                                </div>
+                            </div>
+                            <div class="card-big-val" id="val-temp">-- °C</div>
+                            <div class="status-pill neutral" id="temp-status-pill">
+                                <span class="pill-dot"></span> <span id="temp-status-text">Sin datos</span>
+                            </div>
+                        </div>
+
+                        <div class="sub-card card-vivid">
+                            <div class="card-header-flex">
+                                <span class="card-label">Humedad ambiental</span>
+                                <div class="metric-icon-badge cyan-soft">
+                                    <i class="fa-solid fa-cloud-sun-rain"></i>
+                                </div>
+                            </div>
+                            <div class="card-big-val" id="val-hum-amb">-- %</div>
+                            <div class="status-pill neutral" id="hum-status-pill">
+                                <span class="pill-dot"></span> <span id="hum-status-text">Sin datos</span>
+                            </div>
+                        </div>
+
+                        <div class="sub-card card-vivid">
+                            <div class="card-header-flex">
+                                <span class="card-label">Iluminación (LDR)</span>
+                                <div class="metric-icon-badge amber-soft" id="luz-icon-wrapper">
+                                    <i class="fa-solid fa-sun" id="luz-icon"></i>
+                                </div>
+                            </div>
+                            <div class="card-big-val" id="val-luz-text">--</div>
+                            <div class="status-pill neutral" id="luz-status-pill">
+                                <span class="pill-dot"></span> <span id="luz-status-text">Sin datos</span>
+                            </div>
+                        </div>
+
+                        <div class="sub-card card-vivid">
+                            <div class="card-header-flex">
+                                <span class="card-label">Proximidad (Ultrasonido)</span>
+                                <div class="metric-icon-badge emerald-soft">
+                                    <i class="fa-solid fa-ruler-combined"></i>
+                                </div>
+                            </div>
+                            <div class="card-big-val" id="val-dist-text">-- cm</div>
+                            <div class="status-pill neutral" id="prox-status-pill">
+                                <span class="pill-dot"></span> <span id="prox-status-text">Sin datos</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="chart-section-card shadow-soft">
+                        <div class="chart-header-flex">
+                            <div>
+                                <h3 class="chart-title"><i class="fa-solid fa-chart-line"></i> Tendencia de Variables Climáticas</h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted);">Monitoreo continuo de humedad de suelo y temperatura ambiente</p>
+                            </div>
+                        </div>
+                        <div class="chart-box">
+                            <canvas id="graficaGeneral"></canvas>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECCIÓN: ASISTENTE IA -->
+                <section id="sec-ia-chat" class="seccion-view oculto">
+                    <h1 class="page-title"><i class="fa-solid fa-robot"></i> Asistente Agronómico IA (Gemini API)</h1>
+                    <p class="section-desc">Resuelve dudas sobre tu cultivo de tomate, lecturas de sensores ESP32, roles del sistema o parámetros agronómicos en tiempo real.</p>
+                    
+                    <div class="ia-chat-container">
+                        <div class="ia-chat-messages" id="ia-messages-box">
+                            <div class="chat-msg bot">
+                                <i class="fa-solid fa-robot bot-icon"></i>
+                                <div class="msg-bubble">
+                                    <strong>¡Hola! Soy tu asistente Tomnova IA.</strong><br>
+                                    Estoy conectado para resolver tus dudas exactas sobre el cultivo de tomate, roles de usuario y sensores del ESP32. ¿En qué te ayudo?
+                                </div>
+                            </div>
+                        </div>
+                        <form class="ia-chat-input-bar" onsubmit="enviarPreguntaIA(event)">
+                            <input type="text" id="ia-input-text" placeholder="Escribe tu consulta agronómica o duda del sistema..." required autocomplete="off">
+                            <button type="submit" class="btn-send-ia"><i class="fa-solid fa-paper-plane"></i> Preguntar</button>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- SECCIÓN: CENTRO DE ALERTAS -->
+                <section id="sec-alertas" class="seccion-view oculto">
+                    <div class="alerts-header-flex">
+                        <div>
+                            <h1 class="page-title"><i class="fa-solid fa-bell title-icon"></i> Centro de Alertas</h1>
+                            <p class="section-desc">Notificaciones generadas automáticamente cuando un sensor detecta anomalías.</p>
+                        </div>
+                        <button class="btn-clear-all" onclick="eliminarTodasLasAlertas()">
+                            <i class="fa-solid fa-broom"></i> Limpiar todas las alertas
+                        </button>
+                    </div>
+                    <div class="alerts-list" id="alerts-container">
+                    </div>
+                </section>
+
+                <!-- SECCIÓN: HISTORIAL DE MEDICIONES -->
+                <section id="sec-historial" class="seccion-view oculto">
+                    <div class="historial-header-flex">
+                        <div>
+                            <h1 class="page-title"><i class="fa-solid fa-clock-rotate-left title-icon"></i> Historial de Mediciones</h1>
+                            <p class="section-desc">Registro en vivo de las últimas lecturas enviadas por el nodo ESP32.</p>
+                        </div>
+                    </div>
+                    <div class="table-card table-card-styled">
+                        <table class="data-table-modern">
+                            <thead>
+                                <tr>
+                                    <th><i class="fa-solid fa-clock"></i> Hora</th>
+                                    <th><i class="fa-solid fa-droplet"></i> Hum. Suelo</th>
+                                    <th><i class="fa-solid fa-temperature-half"></i> Temp. Amb.</th>
+                                    <th><i class="fa-solid fa-cloud-sun-rain"></i> Hum. Amb.</th>
+                                    <th><i class="fa-solid fa-sun"></i> Luz</th>
+                                    <th><i class="fa-solid fa-ruler"></i> Distancia</th>
+                                    <th><i class="fa-solid fa-faucet-drip"></i> Estado Riego</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historial-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- SECCIÓN: ENVIAR REPORTES AL ADMIN -->
+                <section id="sec-soporte-admin" class="seccion-view oculto">
+                    <h1 class="page-title"><i class="fa-solid fa-paper-plane"></i> Reportes y Mensajes al Administrador</h1>
+                    <p class="section-desc">Envía novedades al administrador y revisa las respuestas o estados actualizados de tus casos.</p>
+                    
+                    <div class="table-card" style="margin-bottom: 2rem;">
+                        <h3 style="margin-bottom: 1.2rem; font-size: 1.15rem; color: var(--text-primary); font-weight:700;">Crear nuevo reporte</h3>
+                        <form onsubmit="enviarReporteAdmin(event)" style="display: flex; flex-direction: column; gap: 1.2rem;">
+                            <div>
+                                <label style="font-weight: 600; font-size: 0.92rem; color: var(--text-primary); display:block; margin-bottom: 0.4rem;">Asunto o Tipo de Novedad:</label>
+                                <input type="text" id="rep-asunto" placeholder="Ej: Falla en lectura de sensor de suelo" required class="form-control-custom">
+                            </div>
+                            <div>
+                                <label style="font-weight: 600; font-size: 0.92rem; color: var(--text-primary); display:block; margin-bottom: 0.4rem;">Mensaje detallado:</label>
+                                <textarea id="rep-mensaje" rows="4" placeholder="Describe lo que sucede en tu lote de cultivo..." required class="form-control-custom textarea-custom"></textarea>
+                            </div>
+                            <button type="submit" class="btn-save" style="width: fit-content; padding: 0.8rem 1.8rem; font-size: 0.95rem; display:flex; align-items:center; gap:0.5rem;"><i class="fa-solid fa-paper-plane"></i> Enviar Novedad al Admin</button>
+                        </form>
+                    </div>
+
+                    <div class="table-card">
+                        <h3 style="margin-bottom: 1.2rem; font-size: 1.15rem; color: var(--text-primary); font-weight:700;">Historial de mis reportes y seguimiento</h3>
+                        <div id="mis-reportes-cards-container" class="reports-cards-list">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECCIÓN: AJUSTES DEL CULTIVO -->
+                <section id="sec-ajustes" class="seccion-view oculto">
+                    <h1 class="page-title"><i class="fa-solid fa-sliders"></i> Ajustes del cultivo</h1>
+                    <p class="section-desc">Personaliza las condiciones ideales de tu cultivo de tomate (umbrales de riego, temperatura y luminosidad).</p>
+                    
+                    <form class="settings-grid-form" onsubmit="guardarAjustes(event)">
+                        <div class="setting-field">
+                            <label>Abrir riego bajo (%)</label>
+                            <input type="number" id="cfg-riego-on" value="85" min="0" max="100">
+                        </div>
+                        <div class="setting-field">
+                            <label>Cerrar riego desde (%)</label>
+                            <input type="number" id="cfg-riego-off" value="90" min="0" max="100">
+                        </div>
+                        <div class="setting-field">
+                            <label>Temperatura día, mínima (°C)</label>
+                            <input type="number" id="cfg-temp-dia-min" value="21">
+                        </div>
+                        <div class="setting-field">
+                            <label>Temperatura día, máxima (°C)</label>
+                            <input type="number" id="cfg-temp-dia-max" value="27">
+                        </div>
+                        <div class="setting-field">
+                            <label>Temperatura noche, mínima (°C)</label>
+                            <input type="number" id="cfg-temp-noche-min" value="15">
+                        </div>
+                        <div class="setting-field">
+                            <label>Temperatura noche, máxima (°C)</label>
+                            <input type="number" id="cfg-temp-noche-max" value="18">
+                        </div>
+                        <div class="setting-field">
+                            <label>Humedad ambiental, mínima (%)</label>
+                            <input type="number" id="cfg-hum-min" value="60">
+                        </div>
+                        <div class="setting-field">
+                            <label>Humedad ambiental, máxima (%)</label>
+                            <input type="number" id="cfg-hum-max" value="80">
+                        </div>
+                        <div class="setting-field">
+                            <label>Umbral de oscuridad del LDR (0–4095)</label>
+                            <input type="number" id="cfg-ldr-threshold" value="2500">
+                        </div>
+                        <div class="setting-field">
+                            <label>Distancia de alerta (cm)</label>
+                            <input type="number" id="cfg-prox-threshold" value="50">
+                        </div>
+                        <div class="form-action-row">
+                            <button type="submit" class="btn-save"><i class="fa-solid fa-floppy-disk"></i> Guardar ajustes del cultivo</button>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- SECCIÓN: ADMIN PANEL -->
+                <section id="sec-admin-panel" class="seccion-view oculto">
+                    <h1 class="page-title"><i class="fa-solid fa-users-gear"></i> Panel de Administración de Cuentas</h1>
+                    <p class="section-desc">Módulo exclusivo de gestión. Puedes ascender agricultores o eliminar usuarios con los botones de acción.</p>
+                    
+                    <div class="admin-summary-cards">
+                        <div class="admin-stat-card">
+                            <i class="fa-solid fa-users stat-icon"></i>
+                            <div>
+                                <h3 id="stat-total-users">0</h3>
+                                <p>Usuarios Registrados</p>
+                            </div>
+                        </div>
+                        <div class="admin-stat-card">
+                            <i class="fa-solid fa-user-shield stat-icon gold"></i>
+                            <div>
+                                <h3 id="stat-total-admins">0</h3>
+                                <p>Administradores</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-card">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Usuario / Nombre</th>
+                                    <th>Correo Electrónico</th>
+                                    <th>Rol Actual</th>
+                                    <th>Estado</th>
+                                    <th>Acciones de Gestión</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usuarios-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- SECCIÓN: ADMIN REPORTES -->
+                <section id="sec-admin-reportes" class="seccion-view oculto">
+                    <h1 class="page-title"><i class="fa-solid fa-inbox"></i> Reportes y Gestión de Novedades</h1>
+                    <p class="section-desc">Revisa los mensajes de los agricultores, abre el chat completo para comunicarte y actualiza su estado.</p>
+                    
+                    <div class="table-card">
+                        <div id="admin-reports-cards-container" class="reports-cards-list">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECCIÓN: PERFIL -->
+                <section id="sec-perfil" class="seccion-view oculto">
+                    <h1 class="page-title"><i class="fa-solid fa-user-gear"></i> Perfil de usuario</h1>
+                    <div class="profile-card">
+                        <div class="profile-avatar">
+                            <img src="assets/TomNova.jpeg" alt="Logo" style="width: 50px; height: 50px; object-fit: contain;" onerror="this.onerror=null; this.src='assets/logo-tomnova.svg';">
+                        </div>
+                        <div class="profile-info">
+                            <h2 id="prof-name">Usuario Tomnova</h2>
+                            <p><strong>Correo:</strong> <span id="prof-email">usuario@fincasalvador.com</span></p>
+                            <p><strong>Rol en el sistema:</strong> <span class="badge-tag" id="prof-role">Agricultor</span></p>
+                            <p><strong>Ubicación:</strong> Finca Salvador (Guachetá, Cundinamarca)</p>
+                            <p><strong>Proyecto:</strong> Tomnova IoT — Universidad de Cundinamarca</p>
+                            <div class="role-privileges-box" id="role-privileges-desc"><strong>Privilegios activos:</strong> Acceso total de gestión y supervisión de agricultores.</div>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL CHAT DE REPORTES -->
+    <div id="modal-reporte" class="modal-overlay oculto">
+        <div class="modal-chat-box">
+            <div class="modal-chat-header">
+                <div>
+                    <h3 id="modal-chat-title">Detalle del Reporte</h3>
+                    <span id="modal-chat-meta" class="modal-meta-txt">Agricultor • Fecha</span>
+                </div>
+                <button class="modal-close-btn" onclick="cerrarModalReporte()">&times;</button>
+            </div>
+            
+            <div class="modal-chat-body" id="modal-chat-body">
+            </div>
+
+            <div class="modal-chat-footer">
+                <div class="modal-status-bar" id="modal-status-bar">
+                    <label style="font-weight: 600; font-size: 0.88rem; color: var(--text-primary);">Estado del reporte:</label>
+                    <select id="modal-status-select" class="status-select-input">
+                        <option value="Pendiente">Pendiente</option>
+                        <option value="En Proceso">En Proceso</option>
+                        <option value="Resuelta">Resuelta</option>
+                    </select>
+                </div>
+
+                <div class="modal-reply-box-wrapper">
+                    <label style="font-weight: 600; font-size: 0.88rem; color: var(--text-primary); display:block; margin-bottom: 0.3rem;">Escribir respuesta oficial o actualización:</label>
+                    <textarea id="modal-reply-text" rows="3" placeholder="Escribe tu respuesta detallada para el agricultor aquí..." class="form-control-custom textarea-custom"></textarea>
+                    
+                    <div style="display: flex; justify-content: flex-end; margin-top: 0.6rem;">
+                        <button class="btn-primary" style="width: auto; padding: 0.65rem 1.4rem; font-size: 0.92rem; display: flex; align-items: center; gap: 0.5rem;" onclick="enviarRespuestaModal()">
+                            <i class="fa-solid fa-paper-plane"></i> Enviar al Agricultor
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/datos.js"></script>
+    <script src="js/graficas.js"></script>
+    <script src="js/app.js?v=8.0"></script>
+</body>
+</html>
