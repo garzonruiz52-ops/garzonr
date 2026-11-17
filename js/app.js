@@ -8,6 +8,15 @@ try {
         }
     }
 
+    const repGuardados = localStorage.getItem('tomnova_reportes');
+    if (repGuardados) {
+        const parsedReports = JSON.parse(repGuardados);
+        if (Array.isArray(parsedReports)) {
+            BASE_DATOS_REPORTES.length = 0;
+            BASE_DATOS_REPORTES.push(...parsedReports);
+        }
+    }
+
     const sesionGuardada = localStorage.getItem('tomnova_sesion');
     if (sesionGuardada) {
         const parsedSession = JSON.parse(sesionGuardada);
@@ -237,10 +246,28 @@ function manejarLogin(event) {
         localStorage.setItem('tomnova_sesion', JSON.stringify(usuarioSesionActual));
     } catch(err) {}
     aplicarPermisosRol();
+    if (usuarioSesionActual.rol === 'Administrador') {
+        renderizarPanelAdmin();
+    }
 }
 function manejarRegistro(event) {
     event.preventDefault();
-    const nuevo = { nombre: document.getElementById('reg-nombre').value, email: document.getElementById('reg-email').value, pass: document.getElementById('reg-pass').value, rol: "Agricultor", estado: "Activo" };
+    const nombre = document.getElementById('reg-nombre').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const pass = document.getElementById('reg-pass').value.trim();
+
+    if (!nombre || !email || !pass) {
+        alert('Completa nombre, correo y contraseña antes de registrarte.');
+        return;
+    }
+
+    const emailExiste = BASE_DATOS_USUARIOS.some(u => u.email.toLowerCase() === email.toLowerCase());
+    if (emailExiste) {
+        alert('Ya existe una cuenta registrada con ese correo electrónico.');
+        return;
+    }
+
+    const nuevo = { nombre, email, pass, rol: "Agricultor", estado: "Activo" };
     BASE_DATOS_USUARIOS.push(nuevo);
     usuarioSesionActual = nuevo;
     try {
@@ -249,6 +276,9 @@ function manejarRegistro(event) {
     } catch(err) {}
     alert("Registro exitoso.");
     aplicarPermisosRol();
+    if (usuarioSesionActual.rol === 'Administrador') {
+        renderizarPanelAdmin();
+    }
 }
 
 function aplicarPermisosRol() {
@@ -457,9 +487,31 @@ function renderizarMisReportes() {
 }
 
 function renderizarPanelAdmin() {
-    const container = document.getElementById('admin-reports-cards-container');
+    const tabla = document.getElementById('usuarios-tbody');
+    const totalUsers = document.getElementById('stat-total-users');
+    const totalAdmins = document.getElementById('stat-total-admins');
+
+    if (totalUsers) totalUsers.innerText = BASE_DATOS_USUARIOS.length;
+    if (totalAdmins) totalAdmins.innerText = BASE_DATOS_USUARIOS.filter(u => u.rol === 'Administrador').length;
+
+    if (tabla) {
+        tabla.innerHTML = BASE_DATOS_USUARIOS.map((usuario, index) => `
+            <tr>
+                <td>${usuario.nombre}</td>
+                <td>${usuario.email}</td>
+                <td>${usuario.rol}</td>
+                <td><span class="badge-tag">${usuario.estado || 'Activo'}</span></td>
+                <td>
+                    ${usuario.rol !== 'Administrador' ? `<button class="btn-promote" onclick="ascenderUsuario(${index})">Ascender</button>` : '<span style="color: #64748b; font-weight: 700;">Admin</span>'}
+                    <button class="btn-delete" onclick="eliminarUsuario(${index})">Eliminar</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    const reportsContainer = document.getElementById('admin-reports-cards-container');
     const badge = document.getElementById('badge-reportes');
-    if (!container) return;
+    if (!reportsContainer) return;
 
     const reportes = [...BASE_DATOS_REPORTES].sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
     if (badge) {
@@ -468,7 +520,7 @@ function renderizarPanelAdmin() {
     }
 
     if (!reportes.length) {
-        container.innerHTML = `
+        reportsContainer.innerHTML = `
             <div class="no-alerts-card">
                 <i class="fa-solid fa-inbox"></i>
                 <h3>No hay reportes</h3>
@@ -478,7 +530,7 @@ function renderizarPanelAdmin() {
         return;
     }
 
-    container.innerHTML = reportes.map(reporte => `
+    reportsContainer.innerHTML = reportes.map(reporte => `
         <div class="report-card">
             <div class="report-card-header">
                 <div>

@@ -15,7 +15,7 @@ const CONFIG = {
     proxThreshold: 50
 };
 
-const BASE_DATOS_USUARIOS = [
+let BASE_DATOS_USUARIOS = [
     { nombre: "Juan Pablo Garzón", email: "admin@fincasalvador.com", pass: "admin123", rol: "Administrador", estado: "Activo" },
     { nombre: "Pedro Pérez", email: "agricultor@fincasalvador.com", pass: "123456", rol: "Agricultor", estado: "Activo" },
     { nombre: "Geidy Gutiérrez", email: "geidy@fincasalvador.com", pass: "123456", rol: "Agricultor", estado: "Activo" }
