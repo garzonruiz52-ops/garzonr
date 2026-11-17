@@ -7,11 +7,33 @@ try {
             BASE_DATOS_USUARIOS = parsed;
         }
     }
+
+    const sesionGuardada = localStorage.getItem('tomnova_sesion');
+    if (sesionGuardada) {
+        const parsedSession = JSON.parse(sesionGuardada);
+        if (parsedSession && parsedSession.email) {
+            const usuarioGuardado = BASE_DATOS_USUARIOS.find(u => u.email.toLowerCase() === parsedSession.email.toLowerCase());
+            if (usuarioGuardado) {
+                usuarioSesionActual = usuarioGuardado;
+            }
+        }
+    }
 } catch(err) {}
+
+if (usuarioSesionActual) {
+    try {
+        localStorage.setItem('tomnova_sesion', JSON.stringify(usuarioSesionActual));
+    } catch(err) {}
+}
+
 let reporteSeleccionadoId = null;
 document.addEventListener("DOMContentLoaded", () => {
     const cfgRiegoOn = document.getElementById('cfg-riego-on');
     if (cfgRiegoOn) cfgRiegoOn.value = CONFIG.riegoOn;
+
+    if (usuarioSesionActual) {
+        aplicarPermisosRol();
+    }
 
     renderizarAlertas();
     setInterval(() => {
@@ -211,6 +233,9 @@ function manejarLogin(event) {
     }
 
     usuarioSesionActual = encontrado;
+    try {
+        localStorage.setItem('tomnova_sesion', JSON.stringify(usuarioSesionActual));
+    } catch(err) {}
     aplicarPermisosRol();
 }
 function manejarRegistro(event) {
@@ -218,6 +243,10 @@ function manejarRegistro(event) {
     const nuevo = { nombre: document.getElementById('reg-nombre').value, email: document.getElementById('reg-email').value, pass: document.getElementById('reg-pass').value, rol: "Agricultor", estado: "Activo" };
     BASE_DATOS_USUARIOS.push(nuevo);
     usuarioSesionActual = nuevo;
+    try {
+        localStorage.setItem('tomnova_usuarios', JSON.stringify(BASE_DATOS_USUARIOS));
+        localStorage.setItem('tomnova_sesion', JSON.stringify(usuarioSesionActual));
+    } catch(err) {}
     alert("Registro exitoso.");
     aplicarPermisosRol();
 }
@@ -263,11 +292,15 @@ function aplicarPermisosRol() {
     cambiarSeccion(esAdmin ? 'admin-panel' : 'panel', document.getElementById(esAdmin ? 'btn-menu-admin-panel' : 'btn-menu-panel'));
     if (!esAdmin) inicializarGraficas();
     renderizarAlertas();
+    renderizarMisReportes();
     sondearESP32();
 }
 
 function cerrarSesion() {
     usuarioSesionActual = null;
+    try {
+        localStorage.removeItem('tomnova_sesion');
+    } catch(err) {}
     document.getElementById('app-container').classList.add('oculto');
     document.getElementById('auth-container').style.display = 'flex';
 }
@@ -328,13 +361,13 @@ function actualizarDashboard(d) {
     if (riegoDot && riegoSubText) {
         if (regando === null) {
             riegoDot.className = "dot-indicator green";
-            riegoSubText.innerText = 'Sin dato de humedad del suelo';
+            riegoSubText.innerText = 'Servo: cierra compuerta • Esperando datos del ESP32';
         } else if (regando) {
             riegoDot.className = "dot-indicator red";
-            riegoSubText.innerHTML = `<strong style="color: var(--accent-red);">¡RIEGO ACTIVO!</strong> Suelo al ${fmt(humSuelo)}% (umbral de apertura: ${CONFIG.riegoOn}%)`;
+            riegoSubText.innerText = `Servo: abre compuerta • Suelo al ${fmt(humSuelo)}% (umbral de apertura: ${CONFIG.riegoOn}%)`;
         } else {
             riegoDot.className = "dot-indicator green";
-            riegoSubText.innerText = `Riego en espera: abre por debajo de ${CONFIG.riegoOn} % (Actual: ${fmt(humSuelo)}%)`;
+            riegoSubText.innerText = `Servo: cierra compuerta • Riego en espera: abre por debajo de ${CONFIG.riegoOn} % (Actual: ${fmt(humSuelo)}%)`;
         }
     }
 
@@ -363,117 +396,219 @@ function actualizarDashboard(d) {
     }
 
     if (d.distancia === null) {
-        ponerPill('prox-status-pill', 'prox-status-text', 'neutral', 'Sin datos');
+        ponerPill('prox-status-pill', 'prox-status-text', 'neutral', 'Zumbador inactivo');
     } else {
         const cerca = d.distancia < CONFIG.proxThreshold;
-        ponerPill('prox-status-pill', 'prox-status-text', cerca ? 'warning' : 'success', cerca ? 'Objeto cercano' : 'Zona despejada');
+        ponerPill('prox-status-pill', 'prox-status-text', cerca ? 'warning' : 'success', cerca ? 'Zumbador activo' : 'Zumbador inactivo');
     }
+
+    const bombaAgua = typeof d.bombaAgua === 'boolean' ? d.bombaAgua : (typeof d.riegoActivo === 'boolean' ? d.riegoActivo : null);
 }
 
-async function enviarPreguntaIA(event) {
-    event.preventDefault();
-    const inp = document.getElementById('ia-input-text');
-    const txt = inp.value.trim();
-    if (!txt) return;
-    const box = document.getElementById('ia-messages-box');
-    box.innerHTML += `<div class="chat-msg user"><i class="fa-solid fa-user user-icon"></i><div class="msg-bubble">${txt}</div></div>`;
-    inp.value = '';
-    setTimeout(() => {
-        box.innerHTML += `<div class="chat-msg bot"><i class="fa-solid fa-robot bot-icon"></i><div class="msg-bubble"><strong>Tomnova IA:</strong> Entendido sobre "${txt}". El sistema opera con normalidad.</div></div>`;
-        box.scrollTop = box.scrollHeight;
-    }, 800);
+function guardarReportesEnStorage() {
+    try {
+        localStorage.setItem('tomnova_reportes', JSON.stringify(BASE_DATOS_REPORTES));
+    } catch (err) {}
+}
+
+function obtenerReportesDelUsuario() {
+    if (!usuarioSesionActual) return [];
+
+    return BASE_DATOS_REPORTES.filter(reporte => {
+        const emailActual = (usuarioSesionActual.email || '').toLowerCase();
+        const nombreActual = (usuarioSesionActual.nombre || '').toLowerCase();
+        const emailReporte = (reporte.usuarioEmail || '').toLowerCase();
+        const nombreReporte = (reporte.usuarioNombre || '').toLowerCase();
+        return emailReporte === emailActual || nombreReporte === nombreActual;
+    }).sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
+}
+
+function renderizarMisReportes() {
+    const container = document.getElementById('mis-reportes-cards-container');
+    if (!container) return;
+
+    const misReportes = obtenerReportesDelUsuario();
+    if (!misReportes.length) {
+        container.innerHTML = `
+            <div class="no-alerts-card">
+                <i class="fa-solid fa-paper-plane"></i>
+                <h3>Sin novedades enviadas</h3>
+                <p>Aún no has registrado ningún reporte para el administrador.</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = misReportes.map(reporte => `
+        <div class="report-card">
+            <div class="report-card-header">
+                <div>
+                    <span class="report-tag ${reporte.estado === 'Resuelta' ? 'success' : reporte.estado === 'En Proceso' ? 'warning' : 'pending'}">${reporte.estado || 'Pendiente'}</span>
+                    <h4>${reporte.asunto}</h4>
+                </div>
+                <span class="report-date">${new Date(reporte.fecha).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+            </div>
+            <p class="report-message-preview">${reporte.mensaje}</p>
+            <div class="report-card-actions">
+                <button class="btn-secondary" onclick="abrirModalReporte(${reporte.id})">Abrir seguimiento</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderizarPanelAdmin() {
+    const container = document.getElementById('admin-reports-cards-container');
+    const badge = document.getElementById('badge-reportes');
+    if (!container) return;
+
+    const reportes = [...BASE_DATOS_REPORTES].sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
+    if (badge) {
+        badge.innerText = reportes.length;
+        badge.style.display = reportes.length > 0 ? 'inline-block' : 'none';
+    }
+
+    if (!reportes.length) {
+        container.innerHTML = `
+            <div class="no-alerts-card">
+                <i class="fa-solid fa-inbox"></i>
+                <h3>No hay reportes</h3>
+                <p>Cuando un agricultor envíe una novedad, aparecerá aquí.</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = reportes.map(reporte => `
+        <div class="report-card">
+            <div class="report-card-header">
+                <div>
+                    <span class="report-tag ${reporte.estado === 'Resuelta' ? 'success' : reporte.estado === 'En Proceso' ? 'warning' : 'pending'}">${reporte.estado || 'Pendiente'}</span>
+                    <h4>${reporte.asunto}</h4>
+                </div>
+                <span class="report-date">${reporte.usuarioNombre || 'Usuario'} • ${new Date(reporte.fecha).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+            </div>
+            <p class="report-message-preview">${reporte.mensaje}</p>
+            <div class="report-card-actions">
+                <button class="btn-secondary" onclick="abrirModalReporte(${reporte.id})">Responder</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function abrirModalReporte(id) {
+    const reporte = BASE_DATOS_REPORTES.find(r => Number(r.id) === Number(id));
+    if (!reporte) return;
+
+    reporteSeleccionadoId = Number(id);
+    const modal = document.getElementById('modal-reporte');
+    const title = document.getElementById('modal-chat-title');
+    const meta = document.getElementById('modal-chat-meta');
+    const body = document.getElementById('modal-chat-body');
+    const status = document.getElementById('modal-status-select');
+    const replyText = document.getElementById('modal-reply-text');
+
+    if (title) title.innerText = reporte.asunto;
+    if (meta) meta.innerText = `${reporte.usuarioNombre || 'Usuario'} • ${new Date(reporte.fecha).toLocaleDateString('es-CO', { dateStyle: 'medium' })}`;
+    if (status) status.value = reporte.estado || 'Pendiente';
+    if (replyText) replyText.value = '';
+
+    const mensajes = Array.isArray(reporte.mensajes) ? reporte.mensajes : [{ tipo: 'usuario', texto: reporte.mensaje, fecha: reporte.fecha }];
+    body.innerHTML = mensajes.map(msg => {
+        const esAdmin = msg.tipo === 'admin';
+        return `
+            <div class="chat-bubble ${esAdmin ? 'admin' : 'user'}">
+                <div class="chat-header-line">
+                    <strong>${esAdmin ? 'Administrador' : (reporte.usuarioNombre || 'Agricultor')}</strong>
+                    <span>${new Date(msg.fecha).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                </div>
+                <p>${msg.texto}</p>
+            </div>
+        `;
+    }).join('');
+
+    if (modal) modal.classList.remove('oculto');
+}
+
+function cerrarModalReporte() {
+    const modal = document.getElementById('modal-reporte');
+    if (modal) modal.classList.add('oculto');
+    reporteSeleccionadoId = null;
 }
 
 function enviarReporteAdmin(event) {
     event.preventDefault();
 
-    const asunto = document.getElementById('rep-asunto').value.trim();
-    const mensaje = document.getElementById('rep-mensaje').value.trim();
+    if (!usuarioSesionActual) {
+        alert('Debes iniciar sesión para enviar un reporte.');
+        return;
+    }
+
+    const asunto = document.getElementById('rep-asunto')?.value.trim();
+    const mensaje = document.getElementById('rep-mensaje')?.value.trim();
 
     if (!asunto || !mensaje) {
-        alert('Completa el asunto y el mensaje antes de enviar.');
+        alert('Completa el asunto y el mensaje antes de enviar el reporte.');
         return;
     }
 
     const nuevoReporte = {
         id: Date.now(),
+        usuarioEmail: usuarioSesionActual.email,
+        usuarioNombre: usuarioSesionActual.nombre,
         asunto,
         mensaje,
-        agricultor: usuarioSesionActual ? usuarioSesionActual.nombre : 'Agricultor',
-        fecha: new Date().toLocaleString('es-CO'),
         estado: 'Pendiente',
-        mensajes: [{
-            emisor: 'agricultor',
-            autor: usuarioSesionActual ? usuarioSesionActual.nombre : 'Agricultor',
-            texto: mensaje,
-            fecha: new Date().toLocaleString('es-CO')
-        }]
+        fecha: new Date().toISOString(),
+        mensajes: [{ tipo: 'usuario', texto: mensaje, fecha: new Date().toISOString() }]
     };
 
     BASE_DATOS_REPORTES.push(nuevoReporte);
-
-    document.getElementById('rep-asunto').value = '';
-    document.getElementById('rep-mensaje').value = '';
-
-    alert('Reporte enviado con éxito.');
-    cambiarSeccion('soporte-admin', document.getElementById('btn-menu-soporte'));
+    guardarReportesEnStorage();
+    renderizarMisReportes();
     renderizarPanelAdmin();
+
+    const form = document.querySelector('#sec-soporte-admin form');
+    if (form) form.reset();
+
+    alert('Reporte enviado correctamente al administrador.');
 }
 
-function renderizarPanelAdmin() {
-    const tbodyUsers = document.getElementById('usuarios-tbody');
-    if (tbodyUsers) {
-        tbodyUsers.innerHTML = '';
-        BASE_DATOS_USUARIOS.forEach((u, index) => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><strong>${u.nombre}</strong></td>
-                <td>${u.email}</td>
-                <td><span class="badge-tag">${u.rol}</span></td>
-                <td><span class="status-pill success"><span class="pill-dot"></span> ${u.estado}</span></td>
-                <td>
-                    ${u.rol !== 'Administrador' ? `<button class="btn-promote" onclick="ascenderUsuario(${index})"><i class="fa-solid fa-shield-halved"></i> Ascender</button>` : ''}
-                    ${u.email !== usuarioSesionActual.email ? `<button class="btn-delete" onclick="eliminarUsuario(${index})"><i class="fa-solid fa-trash"></i> Eliminar</button>` : ''}
-                </td>
-            `;
-            tbodyUsers.appendChild(tr);
-        });
-        document.getElementById('stat-total-users').innerText = BASE_DATOS_USUARIOS.length;
-        document.getElementById('stat-total-admins').innerText = BASE_DATOS_USUARIOS.filter(u => u.rol === 'Administrador').length;
+function enviarRespuestaModal() {
+    if (!reporteSeleccionadoId) {
+        alert('Selecciona un reporte antes de responder.');
+        return;
     }
 
-    const containerReports = document.getElementById('admin-reports-cards-container');
-    if (containerReports) {
-        containerReports.innerHTML = '';
-        if (BASE_DATOS_REPORTES.length === 0) {
-            containerReports.innerHTML = `<div class="no-alerts-card"><i class="fa-solid fa-inbox"></i><h3>No hay reportes</h3><p>Los agricultores no han enviado novedades.</p></div>`;
-            return;
-        }
-        BASE_DATOS_REPORTES.forEach(rep => {
-            const item = document.createElement('div');
-            item.className = 'report-card-item';
-            item.onclick = () => abrirModalReporte(rep.id);
-            item.innerHTML = `
-                <div class="report-card-info">
-                    <div class="report-card-title">${rep.asunto}</div>
-                    <div class="report-card-meta">
-                        <span><i class="fa-solid fa-user"></i> ${rep.agricultor}</span>
-                        <span><i class="fa-solid fa-clock"></i> ${rep.fecha}</span>
-                        <span class="badge-tag">${rep.estado}</span>
-                    </div>
-                    <div class="report-card-preview">${rep.mensaje}</div>
-                </div>
-                <div class="report-card-actions">
-                    <button class="btn-primary" style="padding: 0.5rem 1rem; font-size: 0.85rem;"><i class="fa-solid fa-comments"></i> Ver Chat</button>
-                </div>
-            `;
-            containerReports.appendChild(item);
-        });
+    const respuesta = document.getElementById('modal-reply-text')?.value.trim();
+    const statusValue = document.getElementById('modal-status-select')?.value || 'Pendiente';
+    if (!respuesta) {
+        alert('Escribe una respuesta antes de enviar.');
+        return;
     }
+
+    const reporte = BASE_DATOS_REPORTES.find(r => Number(r.id) === Number(reporteSeleccionadoId));
+    if (!reporte) return;
+
+    reporte.estado = statusValue;
+    reporte.mensajes = Array.isArray(reporte.mensajes) ? reporte.mensajes : [];
+    reporte.mensajes.push({
+        tipo: 'admin',
+        texto: respuesta,
+        fecha: new Date().toISOString()
+    });
+
+    guardarReportesEnStorage();
+    renderizarPanelAdmin();
+    renderizarMisReportes();
+    abrirModalReporte(reporte.id);
+    alert('Respuesta enviada al agricultor.');
 }
 
 function ascenderUsuario(index) {
     BASE_DATOS_USUARIOS[index].rol = 'Administrador';
+    try {
+        localStorage.setItem('tomnova_usuarios', JSON.stringify(BASE_DATOS_USUARIOS));
+    } catch(err) {}
     renderizarPanelAdmin();
     alert("Usuario ascendido a Administrador exitosamente.");
 }
@@ -481,49 +616,9 @@ function ascenderUsuario(index) {
 function eliminarUsuario(index) {
     if (confirm("¿Estás seguro de eliminar este usuario?")) {
         BASE_DATOS_USUARIOS.splice(index, 1);
+        try {
+            localStorage.setItem('tomnova_usuarios', JSON.stringify(BASE_DATOS_USUARIOS));
+        } catch(err) {}
         renderizarPanelAdmin();
-    }
-}
-
-function abrirModalReporte(id) {
-    reporteSeleccionadoId = id;
-    const rep = BASE_DATOS_REPORTES.find(r => r.id === id);
-    if (!rep) return;
-    document.getElementById('modal-chat-title').innerText = rep.asunto;
-    document.getElementById('modal-chat-meta').innerText = `${rep.agricultor} • ${rep.fecha}`;
-    document.getElementById('modal-status-select').value = rep.estado;
-    
-    const body = document.getElementById('modal-chat-body');
-    body.innerHTML = '';
-    rep.mensajes.forEach(m => {
-        const wrap = document.createElement('div');
-        wrap.className = `chat-bubble-wrapper ${m.emisor === 'admin' ? 'admin' : 'agricultor'}`;
-        wrap.innerHTML = `
-            <div class="chat-bubble-header">${m.autor}</div>
-            <div class="chat-bubble-content">${m.texto}</div>
-            <div class="chat-bubble-time">${m.fecha}</div>
-        `;
-        body.appendChild(wrap);
-    });
-    body.scrollTop = body.scrollHeight;
-    document.getElementById('modal-reporte').classList.remove('oculto');
-}
-
-function cerrarModalReporte() {
-    document.getElementById('modal-reporte').classList.add('oculto');
-}
-
-function enviarRespuestaModal() {
-    const txt = document.getElementById('modal-reply-text').value.trim();
-    const nuevoEstado = document.getElementById('modal-status-select').value;
-    if (!txt) return;
-    const rep = BASE_DATOS_REPORTES.find(r => r.id === reporteSeleccionadoId);
-    if (rep) {
-        rep.estado = nuevoEstado;
-        rep.mensajes.push({ emisor: 'admin', autor: usuarioSesionActual.nombre, texto: txt, fecha: new Date().toLocaleString('es-CO') });
-        abrirModalReporte(rep.id);
-        document.getElementById('modal-reply-text').value = '';
-        renderizarPanelAdmin();
-        alert("Respuesta enviada al agricultor.");
     }
 }

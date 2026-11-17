@@ -18,6 +18,7 @@ async function obtenerDatosESP32() {
 // Los campos que el ESP32 no envíe quedan en null (nunca se inventan).
 function normalizarLectura(l) {
     const num = v => (typeof v === 'number' ? v : null);
+    const bool = v => (typeof v === 'boolean' ? v : (typeof v === 'number' ? v !== 0 : null));
 
     let esNoche = null;
     if (typeof l.esNoche === 'boolean') {
@@ -27,6 +28,11 @@ function normalizarLectura(l) {
         esNoche = l.ldr >= CONFIG.ldrThreshold;
     }
 
+    const bombaAgua = typeof l.bombaAgua === 'boolean' ? l.bombaAgua :
+        (typeof l.estadoBomba === 'boolean' ? l.estadoBomba :
+        (typeof l.bomba_agua === 'boolean' ? l.bomba_agua :
+        (typeof l.riegoActivo === 'boolean' ? l.riegoActivo : bool(l.bombaAgua))));
+
     return {
         ts: l.ts,
         temperatura: num(l.temperatura),
@@ -34,6 +40,7 @@ function normalizarLectura(l) {
         humedadSuelo: num(l.humedadSuelo),
         distancia: num(l.distancia),
         esNoche: esNoche,
-        riegoActivo: typeof l.riegoActivo === 'boolean' ? l.riegoActivo : null
+        riegoActivo: typeof l.riegoActivo === 'boolean' ? l.riegoActivo : null,
+        bombaAgua: bombaAgua
     };
 }
